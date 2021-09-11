@@ -1,0 +1,35 @@
+services:
+  postponer:
+    container_name: postponer
+    build:
+      context: postponer
+    environment:
+      - DB_DSN=postgres://postgres:pg_pass@db:/postgres?sslmode=disable
+    ports:
+      - 80:80
+    depends_on:
+      - db
+  db:
+    container_name: postponer_db
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: pg_pass
+    ports:
+      - 5432:5432
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+#  db:
+#    image: percona:8 # 5.7.22
+#    restart: always
+#    environment:
+#      MYSQL_DATABASE: db
+#      MYSQL_USER: mysql
+#      MYSQL_PASSWORD: mysql_password
+#      MYSQL_ROOT_PASSWORD: root_password
+#    volumes:
+#      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+#    ports:
+#      - 3306:3306
+#    cap_add:
+#      - SYS_NICE
