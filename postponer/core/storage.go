@@ -1,9 +1,12 @@
 package core
 
 import (
+	"errors"
 	"postponer/model"
 	"time"
 )
+
+var ErrNoMsg = errors.New("no messages in queue")
 
 type DispatchMessagesTxn interface {
 	Messages() []model.Message

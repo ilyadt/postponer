@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func (b *background) Do() {
 		txn.Commit()
 
 		nextMsg, err := b.Storage.GetNextMessage()
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrNoMsg) { // Unexpected error
 			select {
 			case <-time.After(1 * time.Second): // Ожидание, что база оживет
 				continue
@@ -47,7 +48,7 @@ func (b *background) Do() {
 
 		var nextMsgTimer *time.Timer
 
-		if nextMsg == nil {
+		if errors.Is(err, ErrNoMsg) {
 			nextMsgTimer = &time.Timer{C: make(chan time.Time)} // infinite timer
 		} else {
 			nextMsgTimer = time.NewTimer(time.Until(nextMsg.FiresAt))

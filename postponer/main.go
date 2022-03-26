@@ -85,26 +85,29 @@ func main() {
 		defer wg.Done()
 		err := httpServer.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			logger.Info("Error Starting the HTTP Server : " + err.Error())
+			panic("Error Starting the HTTP Server : " + err.Error())
 		}
 	}()
+
+	logger.Info("Started...")
 
 	// Waiting for stop signal
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-done
 
+	// Stopping http server
 	logger.Info("Stopping http server...")
-
-	// Stopping server
 	if err := httpServer.Shutdown(context.Background()); err != nil {
 		logger.Info("Server Shutdown Failed: " + err.Error())
 	}
 
-	logger.Info("Stopping background")
 	// Stopping background service
+	logger.Info("Stopping background service...")
 	stopBackground()
 
 	// Wait till server and background service gracefully finishing
 	wg.Wait()
+
+	logger.Info("Bye-Bye")
 }

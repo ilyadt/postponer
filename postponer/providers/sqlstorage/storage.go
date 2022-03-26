@@ -15,7 +15,14 @@ type sqlStorage struct {
 
 func (m *sqlStorage) SaveNewMessage(message model.Message) error {
 
-	_, err := m.Db.Exec("INSERT INTO postponer_queue(id, queue, body, fires_at, created_at) VALUES ($1, $2, $3, $4, $5)", message.ID, message.Queue, message.Body, message.FiresAt, time.Now())
+	_, err := m.Db.Exec(
+		"INSERT INTO postponer_queue(id, queue, body, fires_at, created_at) VALUES ($1, $2, $3, $4, $5)",
+		message.ID,
+		message.Queue,
+		message.Body,
+		message.FiresAt.Unix(),
+		time.Now().Unix(),
+	)
 
 	if err != nil {
 		m.Logger.Errorf("Mysql save msg: %s, error: %s", message.ID, err.Error())
@@ -30,17 +37,20 @@ func (m *sqlStorage) GetNextMessage() (*model.Message, error) {
 	row := m.Db.QueryRow(`SELECT "id", "queue", "body", "fires_at" FROM "postponer_queue" ORDER BY "fires_at" LIMIT 1 FOR SHARE SKIP LOCKED`)
 
 	res := model.Message{}
-	err := row.Scan(&res.ID, &res.Queue, &res.Body, &res.FiresAt)
+	firesAtUnix := int64(0)
+	err := row.Scan(&res.ID, &res.Queue, &res.Body, &firesAtUnix)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil, core.ErrNoMsg
 		}
 
-		m.Logger.Errorf("Mysql getNextMsg error: %s", err.Error())
+		m.Logger.Errorf("Mysql getNextMsg error: %s\n", err.Error())
 
 		return nil, err
 	}
+
+	res.FiresAt = time.Unix(firesAtUnix, 0)
 
 	return &res, nil
 }
@@ -56,7 +66,7 @@ func (m *sqlStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 
 	rows, err := tx.Query(
 		`SELECT "id", "queue", "body", "fires_at" FROM "postponer_queue" WHERE "fires_at" < $1 LIMIT $2 FOR UPDATE SKIP LOCKED`,
-		firesAt,
+		firesAt.Unix(),
 		limit)
 
 	if err != nil {
@@ -71,12 +81,14 @@ func (m *sqlStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 
 	for rows.Next() {
 		msg := model.Message{}
+		firesAtUnix := int64(0)
 
-		if err := rows.Scan(&msg.ID, &msg.Queue, &msg.Body, &msg.FiresAt); err != nil {
+		if err := rows.Scan(&msg.ID, &msg.Queue, &msg.Body, &firesAtUnix); err != nil {
 			_ = tx.Rollback()
 			m.Logger.Error("Cannot getMessages scan" + err.Error())
 			return &DispatchMsgsTxn{msgs: []model.Message{}}
 		}
+		msg.FiresAt = time.Unix(firesAtUnix, 0)
 
 		result = append(result, msg)
 	}

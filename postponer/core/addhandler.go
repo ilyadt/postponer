@@ -108,22 +108,22 @@ func (h *handler) Request(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	go h.reloadBackground(msgModel.FiresAt)
+	go h.reloadBackground(msgModel.ID)
 
 	// Returning MessageId to client
 	responseBody := fmt.Sprintf(`{"messageId":"%s"}`, msgModel.ID)
 	_, _ = res.Write([]byte(responseBody))
 }
 
-func (h *handler) reloadBackground(newMsgFiresAt time.Time) {
+func (h *handler) reloadBackground(newMsgID string) {
 	nextMsg, err := h.Storage.GetNextMessage()
-
+	 // No New Messages | DB error
 	if err != nil {
 		return
 	}
 
-	if nextMsg == nil || newMsgFiresAt.Before(nextMsg.FiresAt) {
-		// Reloading background service
+	// Reloading background service if first message in queue is newMsg
+	if newMsgID == nextMsg.ID {
 		h.Background.Reload()
 	}
 }
