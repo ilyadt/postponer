@@ -15,8 +15,6 @@ import (
 	"syscall"
 )
 
-var wg sync.WaitGroup
-
 func main() {
 
 	dispatcher := &stdoutdispatcher.StdoutDispatcher{}
@@ -39,13 +37,15 @@ func main() {
 	storage := sqlstorage.NewStorage(db, logger)
 
 	ctx, stopBackground := context.WithCancel(context.Background())
-	backgroundService := core.NewBackgroundService(storage, dispatcher, ctx)
+	backgroundService := core.NewBackgroundService(ctx, storage, dispatcher)
+
+	var wg sync.WaitGroup
 
 	// background service
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		backgroundService.Do()
+		backgroundService.Do(ctx)
 	}()
 
 	// http-server

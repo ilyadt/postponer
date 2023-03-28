@@ -6,14 +6,13 @@ import (
 	"time"
 )
 
-type background struct {
+type Background struct {
 	Storage    Storage
 	Dispatcher Dispatcher
-	StopCtx    context.Context
 	ReloadChan chan struct{}
 }
 
-func (b *background) Do() {
+func (b *Background) Do(ctx context.Context) {
 	for {
 		txn := b.Storage.GetMessagesForDispatch(time.Now(), 1000)
 
@@ -41,7 +40,7 @@ func (b *background) Do() {
 			select {
 			case <-time.After(1 * time.Second): // Ожидание, что база оживет
 				continue
-			case <-b.StopCtx.Done():
+			case <-ctx.Done():
 				return
 			}
 		}
@@ -60,13 +59,13 @@ func (b *background) Do() {
 		case <-time.After(2 * time.Minute): // Дополнительный релоад по таймеру, на случай скейлинга
 		case <-b.ReloadChan: // Релоад по событию
 			continue
-		case <-b.StopCtx.Done():
+		case <-ctx.Done():
 			return // exit start function
 		}
 	}
 }
 
-func (b *background) Reload() {
+func (b *Background) Reload() {
 	// If service is already waiting for reload, cleaning it
 	select {
 	case <-b.ReloadChan:
@@ -76,11 +75,10 @@ func (b *background) Reload() {
 	b.ReloadChan <- struct{}{}
 }
 
-func NewBackgroundService(s Storage, d Dispatcher, sCtx context.Context) *background {
-	return &background{
+func NewBackgroundService(ctx context.Context, s Storage, d Dispatcher) *Background {
+	return &Background{
 		Storage:    s,
 		Dispatcher: d,
-		StopCtx:    sCtx,
 		ReloadChan: make(chan struct{}),
 	}
 }

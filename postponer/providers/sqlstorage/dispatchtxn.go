@@ -15,23 +15,21 @@ func (txm *DispatchMsgsTxn) Messages() []model.Message {
 	return txm.msgs
 }
 
-func (txm *DispatchMsgsTxn) DeleteMsg(messageId string) {
-
+func (txm *DispatchMsgsTxn) DeleteMsg(messageID string) {
 	// dummy transaction
 	if txm.tx == nil {
 		return
 	}
 
-	_, err := txm.tx.Exec(`DELETE FROM "postponer_queue" WHERE "id" = $1`, messageId)
+	_, err := txm.tx.Exec(`DELETE FROM "postponer_queue" WHERE "id" = $1`, messageID)
 
 	if err != nil {
-		txm.logger.Errorf("Sql delete msg: %s, error: %s", messageId, err.Error())
+		txm.logger.Errorf("Sql delete msg: %s, error: %s", messageID, err.Error())
 	}
 }
 
 // TODO: error trace
 func (txm *DispatchMsgsTxn) Commit() {
-
 	// dummy transaction
 	if txm.tx == nil {
 		return

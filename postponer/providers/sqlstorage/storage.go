@@ -8,14 +8,13 @@ import (
 	"time"
 )
 
-type sqlStorage struct {
-	Db     *sql.DB
+type SQLStorage struct {
+	DB     *sql.DB
 	Logger model.Logger
 }
 
-func (m *sqlStorage) SaveNewMessage(message model.Message) error {
-
-	_, err := m.Db.Exec(
+func (m *SQLStorage) SaveNewMessage(message model.Message) error {
+	_, err := m.DB.Exec(
 		"INSERT INTO postponer_queue(id, queue, body, fires_at, created_at) VALUES ($1, $2, $3, $4, $5)",
 		message.ID,
 		message.Queue,
@@ -26,15 +25,15 @@ func (m *sqlStorage) SaveNewMessage(message model.Message) error {
 
 	if err != nil {
 		m.Logger.Errorf("Mysql save msg: %s, error: %s", message.ID, err.Error())
+
 		return err
 	}
 
 	return nil
 }
 
-func (m *sqlStorage) GetNextMessage() (*model.Message, error) {
-
-	row := m.Db.QueryRow(`SELECT "id", "queue", "body", "fires_at" FROM "postponer_queue" ORDER BY "fires_at" LIMIT 1 FOR SHARE SKIP LOCKED`)
+func (m *SQLStorage) GetNextMessage() (*model.Message, error) {
+	row := m.DB.QueryRow(`SELECT "id", "queue", "body", "fires_at" FROM "postponer_queue" ORDER BY "fires_at" LIMIT 1 FOR SHARE SKIP LOCKED`)
 
 	res := model.Message{}
 	firesAtUnix := int64(0)
@@ -55,8 +54,8 @@ func (m *sqlStorage) GetNextMessage() (*model.Message, error) {
 	return &res, nil
 }
 
-func (m *sqlStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.DispatchMessagesTxn {
-	tx, err := m.Db.Begin()
+func (m *SQLStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.DispatchMessagesTxn {
+	tx, err := m.DB.Begin()
 
 	if err != nil {
 		m.Logger.Error("Mysql cannot start tx, error: " + err.Error())
@@ -72,6 +71,7 @@ func (m *sqlStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 	if err != nil {
 		_ = tx.Rollback()
 		m.Logger.Error("Cannot getMessages " + err.Error())
+
 		return &DispatchMsgsTxn{msgs: []model.Message{}}
 	}
 
@@ -86,6 +86,7 @@ func (m *sqlStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 		if err := rows.Scan(&msg.ID, &msg.Queue, &msg.Body, &firesAtUnix); err != nil {
 			_ = tx.Rollback()
 			m.Logger.Error("Cannot getMessages scan" + err.Error())
+
 			return &DispatchMsgsTxn{msgs: []model.Message{}}
 		}
 		msg.FiresAt = time.Unix(firesAtUnix, 0)
@@ -100,9 +101,9 @@ func (m *sqlStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 	}
 }
 
-func NewStorage(db *sql.DB, l model.Logger) *sqlStorage {
-	return &sqlStorage{
-		Db:     db,
+func NewStorage(db *sql.DB, l model.Logger) *SQLStorage {
+	return &SQLStorage{
+		DB:     db,
 		Logger: l,
 	}
 }

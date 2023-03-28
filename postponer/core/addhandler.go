@@ -2,31 +2,23 @@ package core
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"net/http"
 	"postponer/model"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-type handler struct {
+type Handler struct {
 	Dispatcher Dispatcher
 	Storage    Storage
-	Background *background
+	Background *Background
 }
 
 // Ex. /add?queue=my.favorite.queue&body=this_is_message&delay=5
-func (h *handler) Request(res http.ResponseWriter, req *http.Request) {
-
-	var queue string
-	queueQueryParams, exists := req.URL.Query()["queue"]
-	if !exists {
-		res.WriteHeader(http.StatusBadRequest)
-		_, _ = res.Write([]byte("queue is mandatory"))
-
-		return
-	}
-	queue = queueQueryParams[0]
+func (h *Handler) Request(res http.ResponseWriter, req *http.Request) {
+	queue := req.URL.Query().Get("queue")
 
 	// TODO: check alphanumeric
 	if len(queue) == 0 {
@@ -36,17 +28,7 @@ func (h *handler) Request(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var msgBody string
-
-	bodyQueryParams, exists := req.URL.Query()["body"]
-	if !exists {
-		res.WriteHeader(http.StatusBadRequest)
-		_, _ = res.Write([]byte("body param is mandatory"))
-
-		return
-	}
-
-	msgBody = bodyQueryParams[0]
+	msgBody := req.URL.Query().Get("body")
 
 	// Min length 1, Max Length 256 KB
 	if len(msgBody) == 0 || len(msgBody) > 256*1024*8 {
@@ -56,28 +38,14 @@ func (h *handler) Request(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var delay int // default timeout value
-	delayQueryParams, exists := req.URL.Query()["delay"]
-	if !exists {
-		res.WriteHeader(http.StatusBadRequest)
-		_, _ = res.Write([]byte("delay is mandatory"))
-
-		return
-	}
-
-	var err error
-	delay, err = strconv.Atoi(delayQueryParams[0])
-
-	if err != nil {
-		res.WriteHeader(http.StatusBadRequest)
-		_, _ = res.Write([]byte("delay must be integer"))
-		return
-	}
+	// Message delay value
+	delay, _ := strconv.Atoi(req.URL.Query().Get("delay"))
 
 	// Constraint for message delay
 	if delay > 7*24*60*60 {
 		res.WriteHeader(http.StatusBadRequest)
 		_, _ = res.Write([]byte("delay must be less than 7 days"))
+
 		return
 	}
 
@@ -105,6 +73,7 @@ func (h *handler) Request(res http.ResponseWriter, req *http.Request) {
 
 	if err := h.Storage.SaveNewMessage(msgModel); err != nil {
 		res.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
@@ -115,9 +84,9 @@ func (h *handler) Request(res http.ResponseWriter, req *http.Request) {
 	_, _ = res.Write([]byte(responseBody))
 }
 
-func (h *handler) reloadBackground(newMsgID string) {
+func (h *Handler) reloadBackground(newMsgID string) {
 	nextMsg, err := h.Storage.GetNextMessage()
-	 // No New Messages | DB error
+	// No New Messages | DB error
 	if err != nil {
 		return
 	}
@@ -128,8 +97,8 @@ func (h *handler) reloadBackground(newMsgID string) {
 	}
 }
 
-func NewAddHandler(d Dispatcher, s Storage, b *background) *handler {
-	return &handler{
+func NewAddHandler(d Dispatcher, s Storage, b *Background) *Handler {
+	return &Handler{
 		Dispatcher: d,
 		Storage:    s,
 		Background: b,
