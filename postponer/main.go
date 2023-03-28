@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	_ "github.com/lib/pq"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +12,9 @@ import (
 	"postponer/providers/stdoutdispatcher"
 	"sync"
 	"syscall"
+	"time"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -75,8 +77,9 @@ func main() {
 	serveMux.HandleFunc("/add", handler.Request)
 
 	httpServer := &http.Server{
-		Addr:    "0.0.0.0:80",
-		Handler: serveMux,
+		Addr:              "0.0.0.0:80",
+		Handler:           serveMux,
+		ReadHeaderTimeout: 30 * time.Second, // Mitigate Slowloris Attack
 	}
 
 	wg.Add(1)
