@@ -79,7 +79,9 @@ func (b *Background) Add(msg *model.Message) {
         default:
         }
 
-        b.ReloadChan <- struct{}{}
+        go func ()  {
+            b.ReloadChan <- struct{}{}
+        }()
     }
 }
 

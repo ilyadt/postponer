@@ -77,8 +77,8 @@ func (h *Handler) Request(res http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Add message for background async
-    go h.Background.Add(msgModel)
+    // Add message to background service
+    h.Background.Add(msgModel)
 
     // Returning MessageId to client
     responseBody := fmt.Sprintf(`{"messageId":"%s"}`, msgModel.ID)
