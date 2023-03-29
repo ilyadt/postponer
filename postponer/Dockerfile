@@ -9,7 +9,12 @@ COPY . /app/
 RUN CGO_ENABLED=0 \
     GOOS=linux \
     GOARCH=amd64 \
-    go build -o /go/bin/postponer
+    go build \
+    # remove debug information for decrease binary size
+    # https://stackoverflow.com/a/21135705/15347300
+    # 7.50 -> 5.26 MB
+    -ldflags "-w -s" \
+    -o /go/bin/postponer
 
 FROM alpine:3.17
 
