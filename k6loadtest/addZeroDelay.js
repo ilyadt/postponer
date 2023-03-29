@@ -1,4 +1,5 @@
-const http = require('k6/http');
+import http  from 'k6/http';
+import exec from 'k6/execution';
 import {check} from 'k6';
 
 const baseUrl = 'http://127.0.0.1/'
@@ -14,7 +15,7 @@ export default function() {
 
     let delay = 5;
     let queue = 'qqqq'
-    let body = 'bbb';
+    let body = exec.scenario.iterationInTest;
 
     let res = http.get(`${baseUrl}/add?queue=${queue}&body=${body}&delay=${delay}`, options);
 

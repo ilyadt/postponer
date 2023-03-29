@@ -41,7 +41,7 @@ func (m *SQLStorage) GetNextMessage() (*model.Message, error) {
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, core.ErrNoMsg
+			return nil, nil
 		}
 
 		m.Logger.Errorf("GetNextMessage error: %s\n", err.Error())
@@ -64,9 +64,10 @@ func (m *SQLStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 	}
 
 	rows, err := tx.Query(
-		`SELECT "id", "queue", "body", "fires_at" FROM "postponer_queue" WHERE "fires_at" < $1 LIMIT $2 FOR UPDATE SKIP LOCKED`,
+		`SELECT "id", "queue", "body", "fires_at" FROM "postponer_queue" WHERE "fires_at" <= $1 ORDER BY "fires_at" LIMIT $2 FOR UPDATE SKIP LOCKED`,
 		firesAt.Unix(),
-		limit)
+		limit,
+	)
 
 	if err != nil {
 		_ = tx.Rollback()

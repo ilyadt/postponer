@@ -2,7 +2,6 @@ package core
 
 import (
     "context"
-    "errors"
     "postponer/model"
     "sync/atomic"
     "time"
@@ -42,7 +41,7 @@ func (b *Background) Do(ctx context.Context) {
         txn.Commit()
 
         nextMsg, err := b.Storage.GetNextMessage()
-        if err != nil && !errors.Is(err, ErrNoMsg) { // Unexpected error
+        if err != nil {
             select {
             case <-time.After(1 * time.Second): // Ожидание, что база оживет
                 continue
@@ -60,7 +59,7 @@ func (b *Background) Do(ctx context.Context) {
         // TODO: defer nextMsgTimer.Close()
         select {
         case <-nextMsgTimer.C: // Время до следующего события в базе
-        case <-time.After(2 * time.Minute): // Релоад по таймеру, на случай скейлинга
+        case <-time.After(30 * time.Second): // Релоад по таймеру, на случай скейлинга
         case <-b.ReloadChan: // Релоад по событию
             continue
         case <-ctx.Done():
