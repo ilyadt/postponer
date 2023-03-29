@@ -1,7 +1,7 @@
 const http = require('k6/http');
 import {check} from 'k6';
 
-const baseUrl = 'http://localhost/'
+const baseUrl = 'http://127.0.0.1/'
 
 export let options = {
     stages: [

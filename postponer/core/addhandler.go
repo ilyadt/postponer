@@ -53,7 +53,7 @@ func (h *Handler) Request(res http.ResponseWriter, req *http.Request) {
 
     firesAt := time.Now().Add(time.Duration(delay) * time.Second)
 
-    msgModel := model.Message{
+    msgModel := &model.Message{
         ID:      uuid.New().String(),
         Queue:   queue,
         Body:    msgBody,
@@ -77,24 +77,12 @@ func (h *Handler) Request(res http.ResponseWriter, req *http.Request) {
         return
     }
 
-    go h.reloadBackground(msgModel.ID)
+    // Add message for background async
+    go h.Background.Add(msgModel)
 
     // Returning MessageId to client
     responseBody := fmt.Sprintf(`{"messageId":"%s"}`, msgModel.ID)
     _, _ = res.Write([]byte(responseBody))
-}
-
-func (h *Handler) reloadBackground(newMsgID string) {
-    nextMsg, err := h.Storage.GetNextMessage()
-    // No New Messages | DB error
-    if err != nil {
-        return
-    }
-
-    // Reloading background service if first message in queue is newMsg
-    if newMsgID == nextMsg.ID {
-        h.Background.Reload()
-    }
 }
 
 func NewAddHandler(d Dispatcher, s Storage, b *Background) *Handler {

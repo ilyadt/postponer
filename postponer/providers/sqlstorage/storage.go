@@ -13,7 +13,7 @@ type SQLStorage struct {
 	Logger model.Logger
 }
 
-func (m *SQLStorage) SaveNewMessage(message model.Message) error {
+func (m *SQLStorage) SaveNewMessage(message *model.Message) error {
 	_, err := m.DB.Exec(
 		"INSERT INTO postponer_queue(id, queue, body, fires_at, created_at) VALUES ($1, $2, $3, $4, $5)",
 		message.ID,
@@ -24,7 +24,7 @@ func (m *SQLStorage) SaveNewMessage(message model.Message) error {
 	)
 
 	if err != nil {
-		m.Logger.Errorf("Mysql save msg: %s, error: %s", message.ID, err.Error())
+		m.Logger.Errorf("save msg: %s, error: %s", message.ID, err.Error())
 
 		return err
 	}
@@ -44,7 +44,7 @@ func (m *SQLStorage) GetNextMessage() (*model.Message, error) {
 			return nil, core.ErrNoMsg
 		}
 
-		m.Logger.Errorf("Mysql getNextMsg error: %s\n", err.Error())
+		m.Logger.Errorf("GetNextMessage error: %s\n", err.Error())
 
 		return nil, err
 	}
@@ -58,9 +58,9 @@ func (m *SQLStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 	tx, err := m.DB.Begin()
 
 	if err != nil {
-		m.Logger.Error("Mysql cannot start tx, error: " + err.Error())
+		m.Logger.Error("cannot start transaction, error: " + err.Error())
 
-		return &DispatchMsgsTxn{msgs: []model.Message{}}
+		return &DispatchMsgsTxn{}
 	}
 
 	rows, err := tx.Query(
@@ -72,12 +72,12 @@ func (m *SQLStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 		_ = tx.Rollback()
 		m.Logger.Error("Cannot getMessages " + err.Error())
 
-		return &DispatchMsgsTxn{msgs: []model.Message{}}
+		return &DispatchMsgsTxn{}
 	}
 
 	defer rows.Close()
 
-	result := make([]model.Message, 0)
+	var result []*model.Message
 
 	for rows.Next() {
 		msg := model.Message{}
@@ -87,11 +87,12 @@ func (m *SQLStorage) GetMessagesForDispatch(firesAt time.Time, limit int) core.D
 			_ = tx.Rollback()
 			m.Logger.Error("Cannot getMessages scan" + err.Error())
 
-			return &DispatchMsgsTxn{msgs: []model.Message{}}
+			return &DispatchMsgsTxn{}
 		}
+
 		msg.FiresAt = time.Unix(firesAtUnix, 0)
 
-		result = append(result, msg)
+		result = append(result, &msg)
 	}
 
 	return &DispatchMsgsTxn{

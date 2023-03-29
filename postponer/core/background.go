@@ -3,17 +3,23 @@ package core
 import (
     "context"
     "errors"
+    "postponer/model"
+    "sync/atomic"
     "time"
 )
 
 type Background struct {
-    Storage    Storage
-    Dispatcher Dispatcher
-    ReloadChan chan struct{}
+    Storage     Storage
+    Dispatcher  Dispatcher
+    ReloadChan  chan struct{}
+    NextMsgUnix atomic.Int64
 }
 
 func (b *Background) Do(ctx context.Context) {
     for {
+        // Init
+        b.NextMsgUnix.Store(0)
+
         txn := b.Storage.GetMessagesForDispatch(time.Now(), 1000)
 
         for len(txn.Messages()) > 0 {
@@ -48,6 +54,7 @@ func (b *Background) Do(ctx context.Context) {
         nextMsgTimer := &time.Timer{C: make(chan time.Time)} // infinite timer
         if nextMsg != nil {
             nextMsgTimer = time.NewTimer(time.Until(nextMsg.FiresAt))
+            b.NextMsgUnix.Store(nextMsg.FiresAt.Unix())
         }
 
         // TODO: defer nextMsgTimer.Close()
@@ -62,14 +69,18 @@ func (b *Background) Do(ctx context.Context) {
     }
 }
 
-func (b *Background) Reload() {
-    // If service is already waiting for reload, cleaning it
-    select {
-    case <-b.ReloadChan:
-    default:
-    }
+func (b *Background) Add(msg *model.Message) {
+    nextFiresAt := b.NextMsgUnix.Load()
 
-    b.ReloadChan <- struct{}{}
+    if msg.FiresAt.Unix() < nextFiresAt || nextFiresAt == 0 {
+        // If service is already waiting for reload, cleaning it
+        select {
+        case <-b.ReloadChan:
+        default:
+        }
+
+        b.ReloadChan <- struct{}{}
+    }
 }
 
 func NewBackgroundService(s Storage, d Dispatcher) *Background {
