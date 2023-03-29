@@ -1,84 +1,81 @@
 package core
 
 import (
-	"context"
-	"errors"
-	"time"
+    "context"
+    "errors"
+    "time"
 )
 
 type Background struct {
-	Storage    Storage
-	Dispatcher Dispatcher
-	ReloadChan chan struct{}
+    Storage    Storage
+    Dispatcher Dispatcher
+    ReloadChan chan struct{}
 }
 
 func (b *Background) Do(ctx context.Context) {
-	for {
-		txn := b.Storage.GetMessagesForDispatch(time.Now(), 1000)
+    for {
+        txn := b.Storage.GetMessagesForDispatch(time.Now(), 1000)
 
-		for len(txn.Messages()) > 0 {
-			for _, msg := range txn.Messages() {
-				err := b.Dispatcher.Dispatch(msg)
+        for len(txn.Messages()) > 0 {
+            for _, msg := range txn.Messages() {
+                err := b.Dispatcher.Dispatch(msg)
 
-				// Protect from not dispatching messages
-				if err != nil {
-					continue
-				}
+                // Protect from not dispatching messages
+                if err != nil {
+                    continue
+                }
 
-				txn.DeleteMsg(msg.ID)
-			}
+                txn.DeleteMsg(msg.ID)
+            }
 
-			txn.Commit()
+            txn.Commit()
 
-			txn = b.Storage.GetMessagesForDispatch(time.Now(), 1000)
-		}
+            txn = b.Storage.GetMessagesForDispatch(time.Now(), 1000)
+        }
 
-		txn.Commit()
+        txn.Commit()
 
-		nextMsg, err := b.Storage.GetNextMessage()
-		if err != nil && !errors.Is(err, ErrNoMsg) { // Unexpected error
-			select {
-			case <-time.After(1 * time.Second): // Ожидание, что база оживет
-				continue
-			case <-ctx.Done():
-				return
-			}
-		}
+        nextMsg, err := b.Storage.GetNextMessage()
+        if err != nil && !errors.Is(err, ErrNoMsg) { // Unexpected error
+            select {
+            case <-time.After(1 * time.Second): // Ожидание, что база оживет
+                continue
+            case <-ctx.Done():
+                return
+            }
+        }
 
-		var nextMsgTimer *time.Timer
+        nextMsgTimer := &time.Timer{C: make(chan time.Time)} // infinite timer
+        if nextMsg != nil {
+            nextMsgTimer = time.NewTimer(time.Until(nextMsg.FiresAt))
+        }
 
-		if errors.Is(err, ErrNoMsg) {
-			nextMsgTimer = &time.Timer{C: make(chan time.Time)} // infinite timer
-		} else {
-			nextMsgTimer = time.NewTimer(time.Until(nextMsg.FiresAt))
-		}
-
-		// TODO: defer nextMsgTimer.Close()
-		select {
-		case <-nextMsgTimer.C: // Время до следующего события в базе
-		case <-time.After(2 * time.Minute): // Дополнительный релоад по таймеру, на случай скейлинга
-		case <-b.ReloadChan: // Релоад по событию
-			continue
-		case <-ctx.Done():
-			return // exit start function
-		}
-	}
+        // TODO: defer nextMsgTimer.Close()
+        select {
+        case <-nextMsgTimer.C: // Время до следующего события в базе
+        case <-time.After(2 * time.Minute): // Релоад по таймеру, на случай скейлинга
+        case <-b.ReloadChan: // Релоад по событию
+            continue
+        case <-ctx.Done():
+            return // exit start function
+        }
+    }
 }
 
 func (b *Background) Reload() {
-	// If service is already waiting for reload, cleaning it
-	select {
-	case <-b.ReloadChan:
-	default:
-	}
+    // If service is already waiting for reload, cleaning it
+    select {
+    case <-b.ReloadChan:
+    default:
+    }
 
-	b.ReloadChan <- struct{}{}
+    b.ReloadChan <- struct{}{}
 }
 
-func NewBackgroundService(ctx context.Context, s Storage, d Dispatcher) *Background {
-	return &Background{
-		Storage:    s,
-		Dispatcher: d,
-		ReloadChan: make(chan struct{}),
-	}
+func NewBackgroundService(s Storage, d Dispatcher) *Background {
+    return &Background{
+        Storage:    s,
+        Dispatcher: d,
+        ReloadChan: make(chan struct{}),
+    }
 }
