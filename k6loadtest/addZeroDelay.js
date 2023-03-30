@@ -15,7 +15,7 @@ export default function() {
 
     let delay = 5;
     let queue = 'qqqq'
-    let body = exec.scenario.iterationInTest;
+    let body = exec.vu.idInTest + "." + exec.scenario.iterationInTest;
 
     let res = http.get(`${baseUrl}/add?queue=${queue}&body=${body}&delay=${delay}`, options);
 

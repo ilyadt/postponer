@@ -1,20 +1,21 @@
 package main
 
 import (
-    "context"
-    "database/sql"
-    "net/http"
-    "os"
-    "os/signal"
-    "postponer/core"
-    "postponer/providers/sqlstorage"
-    "postponer/providers/stdlogger"
-    "postponer/providers/stdoutdispatcher"
-    "sync"
-    "syscall"
-    "time"
+	"context"
+	"database/sql"
+	"net/http"
+	"os"
+	"os/signal"
+	"postponer/core"
+	"postponer/providers/sqlstorage"
+	"postponer/providers/stdlogger"
+	"postponer/providers/stdoutdispatcher"
+	"runtime"
+	"sync"
+	"syscall"
+	"time"
 
-    _ "github.com/lib/pq"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -50,11 +51,14 @@ func main() {
     // background service
     ctx, stopBackground := context.WithCancel(context.Background())
 
-    wg.Add(1)
-    go func() {
-        defer wg.Done()
-        backgroundService.Do(ctx)
-    }()
+    // Run several instances of background service
+    for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            backgroundService.Do(ctx)
+        }()
+    }
 
     // http-server
     handler := core.NewAddHandler(dispatcher, storage, backgroundService)
