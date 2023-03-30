@@ -14,5 +14,5 @@ type DispatchMessagesTxn interface {
 type Storage interface {
     SaveNewMessage(message *model.Message) error
     GetNextMessage() (*model.Message, error)
-    GetMessagesForDispatch(firesAt time.Time, limit int) DispatchMessagesTxn
+    GetMessagesForDispatch(firesAt time.Time, limit int) (DispatchMessagesTxn, error)
 }

@@ -32,6 +32,11 @@ func main() {
     if err != nil {
         panic("Failed to connect to DB error: " + err.Error())
     }
+    defer func() {
+        if err := db.Close(); err != nil {
+            logger.Errorf("Close db connection error: %s", err.Error())
+        }
+    }()
 
     // Ограничение сверху на кол-во коннектов в пуле
     db.SetMaxOpenConns(50)
@@ -45,7 +50,7 @@ func main() {
     // background service
     ctx, stopBackground := context.WithCancel(context.Background())
 
-	wg.Add(1)
+    wg.Add(1)
     go func() {
         defer wg.Done()
         backgroundService.Do(ctx)

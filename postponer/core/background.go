@@ -2,6 +2,7 @@ package core
 
 import (
     "context"
+    "errors"
     "postponer/model"
     "sync/atomic"
     "time"
@@ -19,9 +20,21 @@ func (b *Background) Do(ctx context.Context) {
         // Init
         b.NextMsgUnix.Store(0)
 
-        txn := b.Storage.GetMessagesForDispatch(time.Now(), 1000)
+        // Fetching messages by batches
+        limit := 1000
+        for {
+            if errors.Is(ctx.Err(), context.Canceled) {
+                return
+            }
 
-        for len(txn.Messages()) > 0 {
+            txn, err := b.Storage.GetMessagesForDispatch(time.Now(), limit)
+
+            // Something wrong with database
+            if err != nil {
+                wait(2 * time.Second)
+                continue
+            }
+
             for _, msg := range txn.Messages() {
                 err := b.Dispatcher.Dispatch(msg)
 
@@ -35,22 +48,19 @@ func (b *Background) Do(ctx context.Context) {
 
             txn.Commit()
 
-            txn = b.Storage.GetMessagesForDispatch(time.Now(), 1000)
-        }
-
-        txn.Commit()
-
-        nextMsg, err := b.Storage.GetNextMessage()
-        if err != nil {
-            select {
-            case <-time.After(1 * time.Second): // Ожидание, что база оживет
-                continue
-            case <-ctx.Done():
-                return
+            // If messages have finished, return from cycle
+            if len(txn.Messages()) < limit {
+                break
             }
         }
 
-        nextMsgTimer := &time.Timer{C: make(chan time.Time)} // infinite timer
+        nextMsg, err := b.Storage.GetNextMessage()
+        if err != nil {
+            wait(2 * time.Second)
+            continue
+        }
+
+        nextMsgTimer := newInfiniteTimer()
         if nextMsg != nil {
             nextMsgTimer = time.NewTimer(time.Until(nextMsg.FiresAt))
             b.NextMsgUnix.Store(nextMsg.FiresAt.Unix())
@@ -60,7 +70,7 @@ func (b *Background) Do(ctx context.Context) {
         select {
         case <-nextMsgTimer.C: // Время до следующего события в базе
         case <-time.After(30 * time.Second): // Релоад по таймеру, на случай скейлинга
-        case <-b.ReloadChan: // Релоад по событию
+        case <-b.ReloadChan: // Релоад по событию нового сообщения
             continue
         case <-ctx.Done():
             return // exit start function
@@ -78,7 +88,7 @@ func (b *Background) Add(msg *model.Message) {
         default:
         }
 
-        go func ()  {
+        go func() {
             b.ReloadChan <- struct{}{}
         }()
     }
@@ -90,4 +100,15 @@ func NewBackgroundService(s Storage, d Dispatcher) *Background {
         Dispatcher: d,
         ReloadChan: make(chan struct{}),
     }
+}
+
+func wait(d time.Duration) {
+    timer := time.NewTimer(d)
+    defer timer.Stop()
+
+    <-timer.C
+}
+
+func newInfiniteTimer() *time.Timer {
+    return &time.Timer{C: make(chan time.Time)}
 }
