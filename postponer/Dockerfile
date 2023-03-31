@@ -4,6 +4,10 @@ RUN mkdir /app
 
 WORKDIR /app
 
+# cache
+COPY go.mod go.sum /app/
+RUN go mod download
+
 COPY . /app/
 
 RUN CGO_ENABLED=0 \
