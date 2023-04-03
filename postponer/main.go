@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"postponer/core"
@@ -19,7 +20,6 @@ import (
 )
 
 func main() {
-
     dispatcher := &stdoutdispatcher.StdoutDispatcher{}
 
     logger := &stdlogger.StdLogger{}
@@ -85,6 +85,13 @@ func main() {
     serveMux := new(http.ServeMux)
 
     serveMux.HandleFunc("/add", handler.Request)
+
+    // pprof
+    serveMux.HandleFunc("/debug/pprof/", pprof.Index)
+	serveMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	serveMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	serveMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	serveMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
     httpServer := &http.Server{
         Addr:              "0.0.0.0:80",
